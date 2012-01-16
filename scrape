@@ -1,0 +1,31 @@
+#!/usr/bin/env python
+
+#Simple web scraper for Fio bank public accounts
+
+import sys
+import urllib
+import lxml.html
+#from django.utils.encoding import smart_str
+
+#account overview URL
+url = 'https://www.fio.cz/scgi-bin/hermes/dz-transparent.cgi?pohyby_DAT_od=06.11.2010&ID_ucet=2900086515'
+
+
+content = urllib.urlopen(url).read()
+root = lxml.html.fromstring(content)
+
+for table in root.cssselect("table.table_prm")[2:]:
+    for tr in table.cssselect("tr"):
+        data = {
+        'Datum' : tr[0].text_content(),
+        'Objem' : ((tr[1].text_content()).replace(",", ".")),
+        'Typ' : tr[2].text_content(),
+        'KS' : tr[3].text_content(),
+        'VS' : tr[4].text_content(),
+        'SS' : tr[5].text_content(),
+        'Uzivatel' : tr[6].text_content(),
+        'Sprava' : tr[7].text_content()
+        }
+        data = map(lambda x : x.replace(u"\xa0", " "), data.values())
+
+        print data
