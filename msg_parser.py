@@ -59,6 +59,8 @@ def parse_message(msg):
             else:
                 period['month'] = check_month(m.group('range').split('-')[0])
                 period['month2'] = check_month(m.group('range').split('-')[1])
+                if period['month'] >= period['month2']:
+                    raise MessageSyntaxError('Wrong month range')
         periods.append(period)
     return periods
 
@@ -73,7 +75,7 @@ if __name__ == '__main__':
             )
     negatives = (
             'asdf', '2011/feb', '2012/1-jan', '2011/1-3 2011/april',
-            '2011', '2011/13'  # and so on ...
+            '2011', '2011/13', '2011/3-2', '2012/6-6'
             )
 
     for spec in positives:
