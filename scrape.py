@@ -5,7 +5,6 @@
 import sys
 import urllib
 import lxml.html
-#from django.utils.encoding import smart_str
 
 import sqlite3 as lite
 import datetime
@@ -104,14 +103,14 @@ class MembersDB:
         command += ") VALUES("
         command += ", ".join('?'*len(p))
         command += ");"
-    
+
         arrival = map(lambda x: int(x), p['arrival'].split('.'))
         p['arrival'] = datetime.date(arrival[2], arrival[1], arrival[0])
         self.cur.execute(command, p.values())
 
     def update(self):
         """ Perform update from source (Fio webpages). """
-        
+
         #open DB for storing payments
         #fetch will return dictionary rather then a tuple
 
@@ -131,8 +130,7 @@ class MembersDB:
                 'identification' : tr[6].text_content(),
                 'message' : tr[7].text_content()
                 }
-                #data = map(lambda x : x.encode(encoding='UTF-8'), data.values())
-                
+
                 date=map(lambda x: int(x), p['arrival'].split('.'))
                 self.cur.execute("SELECT * FROM Payments "
                         "WHERE arrival=? "
