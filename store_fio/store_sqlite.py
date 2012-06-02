@@ -1,6 +1,6 @@
-#!/usr/bin/env python2
+#!/usr/bin/env python
 # -*- coding: utf-8 -*-
-#Simple web scraper for Fio bank public accounts
+# script to save new payments to sqlite database
 
 import sys
 import urllib
@@ -9,6 +9,8 @@ import lxml.html
 import sqlite3 as lite
 import datetime
 import unicodedata
+
+import fio
 
 #account overview URL
 url = 'https://www.fio.cz/scgi-bin/hermes/dz-transparent.cgi?pohyby_DAT_od=01.01.2011&ID_ucet=2900086515'
@@ -38,7 +40,7 @@ class MembersDB:
         self.cur.execute("SELECT * FROM Members WHERE id=?;", [member_id])
         return self.cur.fetchone()
 
-    def detect_member(self, p):
+    def detect_member(self, payment):
         """
         Detect member_id from payment $p using:
             1) VS field of payment
@@ -52,7 +54,7 @@ class MembersDB:
 
         # check if there is something in VS field and is usable?
         try:
-            member_id = int(p['VS'])
+            member_id = int(payment.vs)
         except ValueError as e:
             pass
 
@@ -60,7 +62,7 @@ class MembersDB:
             member = self.get_member(member_id)
 
         # use some heuristics, such as detecting memberID from 'identification'
-        if p['identification'].strip():
+        if payment.identification.strip():
             self.cur.execute('SELECT id, name FROM members')
             members = self.cur.fetchall()
             # create list of member names, lowercased, without diacritic
@@ -70,7 +72,7 @@ class MembersDB:
 
  
             # 'Fér   Radek' -> ['fer', 'radek']
-            name = filter(None, rm_dia(p['identification']).lower().split(' '))
+            name = filter(None, rm_dia(payment.identification).lower().split(' '))
 
             # compare names of members and the name for current payment,
             # filter out matching member records.
@@ -88,25 +90,23 @@ class MembersDB:
 
 
 
-    def add_payment(self, p):
-        member=self.detect_member(p)
+    def add_payment(self, payment):
+        member = self.detect_member(payment)
 
         if member:
-            print('new payment from %s'%member['nick'])
-            p['member_id']=member['id']
+            print('new payment from %s' % member['nick'])
+            payment.member_id = member['id']
         else:
-            print('new payment (%s)'%p['arrival'])
+            print('new payment (%s)'% payment.arrival)
 
         # - create new record in Payments
         command  = "INSERT INTO Payments("
-        command += ", ".join(p.keys())
+        command += ", ".join(payment.keys())
         command += ") VALUES("
-        command += ", ".join('?'*len(p))
+        command += ", ".join('?'*len(payment))
         command += ");"
 
-        arrival = map(lambda x: int(x), p['arrival'].split('.'))
-        p['arrival'] = datetime.date(arrival[2], arrival[1], arrival[0])
-        self.cur.execute(command, p.values())
+        self.cur.execute(command, payment.values())
 
     def update(self):
         """ Perform update from source (Fio webpages). """
@@ -114,38 +114,23 @@ class MembersDB:
         #open DB for storing payments
         #fetch will return dictionary rather then a tuple
 
-        content = urllib.urlopen(url).read()
-        root = lxml.html.fromstring(content)
         new_count=0
 
-        for table in root.cssselect("table.table_prm")[2:]:
-            for tr in reversed(table.cssselect("tr")[1:-1]):
-                p = {
-                'arrival' : tr[0].text_content(),
-                'amount' : ((tr[1].text_content()).replace(",", ".")),
-                'payment_type' : tr[2].text_content(),
-                'KS' : tr[3].text_content(),
-                'VS' : tr[4].text_content(),
-                'SS' : tr[5].text_content(),
-                'identification' : tr[6].text_content(),
-                'message' : tr[7].text_content()
-                }
+        for payment in fio.scrape(url):
+            self.cur.execute("SELECT * FROM Payments "
+                    "WHERE arrival=? "
+                    "AND identification=? "
+                    "AND message=?;", (
+                        payment.arrival,
+                        payment.identification, payment.message))
 
-                date=map(lambda x: int(x), p['arrival'].split('.'))
-                self.cur.execute("SELECT * FROM Payments "
-                        "WHERE arrival=? "
-                        "AND identification=? "
-                        "AND message=?;", (
-                            datetime.date(date[2], date[1], date[0]),
-                            p['identification'], p['message']))
-
-                if self.cur.fetchone():
-                    # there is already this payment in DB, skip it
-                    pass
-                else:
-                    # this is new payment, not yet in DB, insert it
-                    self.add_payment(p)
-                    new_count += 1
+            if self.cur.fetchone():
+                # there is already this payment in DB, skip it
+                pass
+            else:
+                # this is new payment, not yet in DB, insert it
+                self.add_payment(payment)
+                new_count += 1
 
         self.cur.execute("INSERT INTO UpdateHistory VALUES(datetime())")
         self.con.commit()
