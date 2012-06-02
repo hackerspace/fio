@@ -22,3 +22,8 @@ When started, it compares records from the output of this CGI script with
 what is stored in local DB (file "members.db", SQLite3, see also "schema.sql")
 and adds any new records. This is because the Fio bank account website shows
 only the last N payments.
+
+store_django.py
+~~~~~~~~~~~~~~~
+
+This app stores new payments in Django site (member portal).
